@@ -14,7 +14,6 @@ open BenchmarkDotNet.Attributes
 open BenchmarkDotNet.Running
 open BenchmarkDotNet.Extensions
 
-
 [<Literal>]
 let FSharpCategory = "fsharp"
 
@@ -104,63 +103,9 @@ type FsPlusBenchmarks () =
         typeCheckFileInProject projectDir projectOptions checker filename
 
 
-[<BenchmarkCategory(FSharpCategory)>]
-type FsToolkitBenchmarks () =
-    
-    let projectDir, projectOptions, checker = prepareProject "FsToolkit.ErrorHandling"
-    
-    let sourceFiles = [for file in projectOptions.SourceFiles do
-                           file, SourceText.ofString (File.ReadAllText file)]
-   
-    let parseAllFiles =
-        let parsingOptions, _diagnostics = checker.GetParsingOptionsFromProjectOptions projectOptions
-        [for file, contents in sourceFiles do
-            checker.ParseFile(file, contents, parsingOptions, cache=false)]
-    
-    [<Benchmark>]
-    member this.ParseAndTypeCheckProject() =
-        parseAndTypeCheckProject (projectDir, projectOptions, checker)
-    
-    [<IterationCleanup(Target = "ParseAndTypeCheckProject")>]
-    member _.TypeCheckingCleanup() =
-        checker.InvalidateAll()
-        checker.ClearLanguageServiceRootCachesAndCollectAndFinalizeAllTransients()
-    
-    [<Benchmark>]
-    member _.ParseAllFilesInProjectSequential() =
-        parseAllFiles |> Async.Sequential |> Async.RunSynchronously
-
-    [<Benchmark>]
-    member _.ParseAllFilesInProjectParallel() =
-        parseAllFiles |> Async.Parallel |> Async.RunSynchronously
-        
-    // [<Benchmark>]
-    // How to avoid cache?
-    member _.GetTooltip() =
-        let file, contents = sourceFiles |> List.find (fun (file, _) -> file.EndsWith "AsyncResult.fs")
-        let _parseResults, typeCheckAnswer = checker.ParseAndCheckFileInProject(file, 0, contents, projectOptions) |> Async.RunSynchronously        
-        match typeCheckAnswer with
-        | FSharpCheckFileAnswer.Succeeded checkFileResults ->
-            let result = checkFileResults.GetToolTip(173, 47, "        values |> Async.map (Result.requireHead error)", ["Result"; "requireHead"], FSharpTokenTag.Identifier)
-            // printfn $"%A{result}"
-            result
-        | _ -> failwith "Type checking failed"
-        
-    // [<Benchmark>]
-    member _.GetAutocompleteList() =
-        let file, contents = sourceFiles |> List.find (fun (file, _) -> file.EndsWith "AsyncResult.fs")
-        let parseResults, typeCheckAnswer = checker.ParseAndCheckFileInProject(file, 0, contents, projectOptions) |> Async.RunSynchronously        
-        match typeCheckAnswer with
-        | FSharpCheckFileAnswer.Succeeded checkFileResults ->
-            let result = checkFileResults.GetDeclarationListInfo(Some parseResults, 9, "    let inline retn (value: 'ok) : Async<Result<'ok, 'error>> = Ok value |> Async.", PartialLongName.Empty 82, (fun () -> []))
-            // Doesn't work, dunno why...
-            result
-        | _ -> failwith "Type checking failed"
-
-
 [<EntryPoint>]
 let main args =
-    let assembly = typeof<FsToolkitBenchmarks>.Assembly
+    let assembly = typeof<FsPlusBenchmarks>.Assembly
     BenchmarkSwitcher
         .FromAssembly(assembly)
         .Run(args, RecommendedConfig.Create(
